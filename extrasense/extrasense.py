@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+from sklearn.ensemble import RandomForestClassifier
+
 
 acc_col_name = ['raw_acc:magnitude_stats:mean',
  'raw_acc:magnitude_stats:std',
@@ -109,26 +111,26 @@ label_col_name = ['label:LYING_DOWN',
 
 acc_labels_name = ["label:LYING_DOWN", 'label:SITTING', 'label:STAIRS_-_GOING_UP', 
                         'label:STAIRS_-_GOING_DOWN', 'label:FIX_walking', 'label:FIX_running',
-                        'label:BICYCLING']
+                        'label:BICYCLING', 'label_source']
 
 data_dir = '../data/features_labels/'
 file_names = os.listdir(data_dir)
 user_ids = [fn.split(".")[0] for fn in file_names]
 
-def clean_labels(labels_df):
+def weka_RF():
+    # trees.RandomForest '-P 100 -I 100 -num-slots 1 
+    #                     -K 0 -M 1.0 -V 0.001 -S 1' 1116839470751428698a
+    clf = RandomForestClassifier(n_estimators=100, 
+                                 max_features="log2",
+                                 min_samples_leaf=1)
+    return clf
+
+def clean_labels(labels_df, include_label_source=True):
     labels = []
-    for ind, row in labels_df.iterrows():
-        #print(np.argmax(row))
-        max_label = np.argmax(row)
-        if np.isnan(np.max(row)):
-            label = max_label
-        else:
-            if ":" in max_label:
-                label = max_label.split(":")[1]
-            else:
-                label=max_label
-        labels.append(label)
-    return pd.Series(labels)
+    clean_labels_df = labels_df.iloc[:,:-1].idxmax(axis=1).str.replace("label:", "")
+    if include_label_source:
+        clean_labels_df = pd.concat((clean_labels_df, labels_df['label_source']), axis=1)
+    return clean_labels_df
 
 def clean_activity_features(features_df):
     null_ind = []
@@ -138,23 +140,36 @@ def clean_activity_features(features_df):
             null_ind.append(ind)
     return features_df.drop(features_df.index[null_ind])
 
+def clean_data(df, data_type="activity", labeled_only=False):
+    if data_type is "activity":
+        features_df = df[df.columns.intersection(acc_col_name)]
+        labels_df = clean_labels(df[df.columns.intersection(acc_labels_name)])
+        df = pd.concat((features_df,labels_df,df['timestamp']), axis=1)
+        df = df.rename(columns={0:'label'})
+        df = df.dropna(subset=acc_col_name)
+    else:
+        feature_columns = [col for col in df.columns if col not in label_col_name]
+        features_df = df[df.columns.intersection(feature_columns)]
+        labels_df = clean_labels(df[df.columns.intersection(label_col_name)])
+        df = pd.concat((features_df,labels_df,df['timestamp']), axis=1)
+        df = df.rename(columns={0:'label'})
+        df = df.dropna(subset=feature_columns)
+    if labeled_only:
+        df = df[df.label.notnull()]
+    return df
+
 def get_data_from_user_id(user_id, data_type=None, labeled_only=False):
     user_df = pd.read_csv(data_dir+user_id+".features_labels.csv")
-    if data_type is "activity":
-        features_df = user_df[user_df.columns.intersection(acc_col_name)]
-        labels_df = clean_labels(user_df[user_df.columns.intersection(acc_labels_name)])
-        user_df = pd.concat((features_df,labels_df), axis=1)
-        user_df = user_df.rename(columns={0:'label'})
-        user_df = user_df.dropna(subset=acc_col_name)
-    else:
-        feature_columns = [col for col in user_df.columns if col not in label_col_name]
-        features_df = user_df[user_df.columns.intersection(feature_columns)]
-        labels_df = clean_labels(user_df[user_df.columns.intersection(label_col_name)])
-        user_df = pd.concat((features_df,labels_df), axis=1)
-        print(user_df.shape)
-        user_df = user_df.rename(columns={0:'label'})
-        user_df = user_df.dropna(subset=feature_columns)
-    if labeled_only:
-        null_mask = labels_df.notnull()
-        user_df = user_df[null_mask]
+    user_df = clean_data(user_df, data_type=data_type, labeled_only=labeled_only)
     return user_df
+
+def get_impersonal_data(leave_users_out=None, data_type=None, labeled_only=False):
+    uids = []
+    user_dfs = []
+    for uid in user_ids:
+        if (leave_users_out is None) or (uid not in leave_users_out):
+            user_df = clean_data(pd.read_csv(data_dir+uid+".features_labels.csv"), data_type=data_type, labeled_only=labeled_only)
+            user_df['user_id'] = [uid] * user_df.shape[0]
+            user_dfs.append(user_df)
+    impersonal_df = pd.concat(user_dfs, ignore_index=True)
+    return impersonal_df
