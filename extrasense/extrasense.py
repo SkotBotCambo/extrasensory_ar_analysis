@@ -125,6 +125,26 @@ def weka_RF():
                                  min_samples_leaf=1)
     return clf
 
+class ZeroR(object):
+    """ZeroR replicates the functionality of a sci-kit learn model using the simple heuristic of predicting
+    the modal label of the training data. Intended for baseline measurements only.
+    
+    Attributes:
+        counter : this is a counter object (from the collections python module) 
+                  which represents the counts from the training labels and is used for the prediction
+    """
+    
+    def __init__(self):
+        """Return a ZeroR classifier"""
+        self.counter = None
+    
+    def fit(self, X, y):
+        self.counter = Counter(y)
+    
+    def predict(self, X):
+        input_len = len(X)
+        return np.array([self.counter.most_common(1)[0][0]] * input_len)
+
 def clean_labels(labels_df, include_label_source=True):
     labels = []
     clean_labels_df = labels_df.iloc[:,:-1].idxmax(axis=1).str.replace("label:", "")
