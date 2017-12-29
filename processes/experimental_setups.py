@@ -37,9 +37,11 @@ def run_experiment1(user_id, training_size=100, learning_algo=es.weka_RF, strati
     
     # setup sampler
     if stratified:
+        print("Initializing StratifiedShuffleSplit()")
         rs = StratifiedShuffleSplit(n_splits=5, train_size=training_size, test_size=100)
         splitter =  rs.split(personal_df, personal_labels)
     else:
+        print("Initializing ShuffleSplit()")
         rs = ShuffleSplit(n_splits=5, train_size=training_size, test_size=100)
         splitter = rs.split(personal_df)
     

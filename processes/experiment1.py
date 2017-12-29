@@ -21,7 +21,7 @@ dview.block=True
 
 dview.scatter('user_ids', es.user_ids)
 
-results_directory = '/home/sac086/extrasensory/results/'
+results_directory = '/home/sac086/extrasensory/results/experiment1/'
 todays_date = datetime.now()
 
 import_string = '''import pandas as pd
